@@ -1,25 +1,41 @@
+using Microsoft.Extensions.Hosting;
+
+try
+{
+
+    var builder = WebApplication.CreateBuilder(args);
+
+    var services = builder.Services;
+
+    services.AddControllers();
+
+    services.AddDependencyInjectionApplication(builder.Configuration);
 
 
-var builder = WebApplication.CreateBuilder(args);
+    var app = builder.Build();
 
-var services = builder.Services;
+    Console.WriteLine($"\nEnvironment : {app.Environment.EnvironmentName}\n");
 
-services.AddControllers();
+    if (app.Environment.IsDevelopment())
+    {
+        app.UseHttpsRedirection();
+    }
 
-services.AddDependencyInjectionApplication(builder.Configuration);
+    app.UseRouting();
 
+    await app.UseDependencyInjectionApplication(app.Environment);
 
-var app = builder.Build();
-
-
-app.UseHttpsRedirection();
-
-app.UseRouting();
-
-app.UseDependencyInjectionApplication(app.Environment);
-
-app.MapControllers();
+    app.MapControllers();
 
 
-await app.RunAsync();
+    await app.RunAsync();
 
+}
+catch (ArgumentOutOfRangeException exOut)
+{
+    var dontPrint = exOut;
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"Error : {ex.Message}");
+}

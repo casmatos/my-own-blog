@@ -12,7 +12,7 @@ namespace CMS.Blog.WebApi.Extensions
         {
             services.AddSwaggerGen(config =>
             {
-                config.SwaggerDoc("v1", 
+                config.SwaggerDoc("v1",
                     new OpenApiInfo
                     {
                         Title = "CMS My Own Blog",
@@ -28,14 +28,11 @@ namespace CMS.Blog.WebApi.Extensions
 
         public static IApplicationBuilder UseDependencyInjectionWebApi(this IApplicationBuilder app, IWebHostEnvironment env)
         {
-            if (env.IsDevelopment())
+            app.UseSwagger();
+            app.UseSwaggerUI(config =>
             {
-                app.UseSwagger();
-                app.UseSwaggerUI(config =>
-                {
-                    config.SwaggerEndpoint("/swagger/v1/swagger.json", "CMS My Own Blog API");
-                });
-            }
+                config.SwaggerEndpoint("/swagger/v1/swagger.json", "CMS My Own Blog API");
+            });
 
             app.UseMiddleware<ExeptionMiddleware>();
 

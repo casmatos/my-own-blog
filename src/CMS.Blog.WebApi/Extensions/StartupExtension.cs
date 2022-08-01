@@ -11,17 +11,21 @@ namespace CMS.Blog.WebApi.Extensions
                         .AddDependencyInjectionServices(config);
         }
 
-        public static IApplicationBuilder UseDependencyInjectionApplication(this IApplicationBuilder app, IWebHostEnvironment env)
+        public static async Task<IApplicationBuilder> UseDependencyInjectionApplication(this IApplicationBuilder app, IWebHostEnvironment env)
         {
             app.UseDependencyInjectionWebApi(env);
 
-            Task taskMigrate = new Task(async() =>
-            {
-                await app.ApplicationServices.InitializeMigrations();
-                await app.ApplicationServices.InitializeSeedDatabase();
-            });
+            using var scope = app.ApplicationServices.CreateScope();
+            var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>();
 
-            taskMigrate.Start();
+            var _logger = logger.CreateLogger("InitializeSeedDatabase");
+
+            _logger.LogInformation("== Start Migrations... ==");
+
+            await app.ApplicationServices.InitializeMigrations();
+            await app.ApplicationServices.InitializeSeedDatabase();
+
+            _logger.LogInformation("== End Migrations... ==");
 
             return app;
         }

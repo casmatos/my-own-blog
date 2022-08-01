@@ -1,20 +1,65 @@
 ﻿using CMS.Blog.Service.Data.Seed;
+using Microsoft.Extensions.Logging;
 
 namespace CMS.Blog.Service.Extensions
 {
     public static class DatabaseExtension
     {
-        const string SQL_CONNECTION = "Server=.;Database=MyOwnBlog;Trusted_Connection=True;MultipleActiveResultSets=true";
+        const string SQL_CONNECTION = "Server={0};Database=MyOwnBlog;Trusted_Connection=True;MultipleActiveResultSets=true";
 
         public static IServiceCollection AddDatabaseApplication(this IServiceCollection services, IConfiguration config)
         {
-            services.AddDbContext<BlogContext>(x =>
+            services.AddDbContext<BlogContext>((services, options) =>
             {
-                if (config.GetSection("UseMemoryDatabase").Exists() && bool.Parse(config.GetSection("UseMemoryDatabase").Value))
-                    x.UseInMemoryDatabase("InMemoryDb");
-                else
-                    x.UseSqlServer(SQL_CONNECTION);
-                
+                var logger = services.GetRequiredService<ILogger<BlogContext>>();
+
+                try
+                {
+
+                    if (config.GetSection("UseMemoryDatabase").Exists() &&
+                        bool.Parse(config.GetSection("UseMemoryDatabase").Value))
+                    {
+                        options.UseInMemoryDatabase("InMemoryDb");
+                    }
+                    else
+                    {
+                        var sqlServerConnection = config.GetSection("SQL_SERVER_CONNECTION_STRING").Value;
+
+                        string connectionString = default;
+
+                        if (!string.IsNullOrEmpty(sqlServerConnection))
+                        {
+                            connectionString = sqlServerConnection;
+                        }
+                        else
+                        {
+                            var isContainer = config.GetSection("DOTNET_RUNNING_IN_CONTAINER").Value;
+
+                            if (isContainer is null)
+                            {
+                                connectionString = string.Format(SQL_CONNECTION, ".");
+                            }
+                            else
+                            {
+                                logger.LogWarning("Container : true");
+                                
+                                throw new ArgumentOutOfRangeException("SQL Server - Connection String", "In container environment, you need define Connection String.");
+                            }
+                        }
+
+                        options.UseSqlServer(connectionString);
+                    }
+
+                }
+                catch (ArgumentOutOfRangeException exOut)
+                {
+                    logger.LogError(exOut.Message, exOut);
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError("============================== : " + ex.Message, ex);
+                }
             });
 
             services.AddMemoryCache();
@@ -25,25 +70,47 @@ namespace CMS.Blog.Service.Extensions
         public static async Task InitializeSeedDatabase(this IServiceProvider services, CancellationToken cancellationToken = default)
         {
             using var scope = services.CreateScope();
-            var contextDatabase = scope.ServiceProvider.GetRequiredService<BlogContext>();
+            using var contextDatabase = scope.ServiceProvider.GetRequiredService<BlogContext>();
+            var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>();
+
+            var _logger = logger.CreateLogger("InitializeSeedDatabase");
 
             InitalSeedData initalData = new InitalSeedData(contextDatabase);
 
-            if (contextDatabase.Database.CanConnect())
-                await initalData.SeedData();
+            try
+            {
+
+                if (contextDatabase.Database.CanConnect())
+                    await initalData.SeedData();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex.Message, ex);
+            }
         }
 
         public static async Task InitializeMigrations(this IServiceProvider services, CancellationToken cancellationToken = default)
         {
             using var scope = services.CreateScope();
-            var contextDatabase = scope.ServiceProvider.GetRequiredService<BlogContext>();
+            using var contextDatabase = scope.ServiceProvider.GetRequiredService<BlogContext>();
             var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+            var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>();
 
-            if (config.GetSection("UseMemoryDatabase").Exists() && 
+            var _logger = logger.CreateLogger("InitializeMigrations");
+
+
+            if (config.GetSection("UseMemoryDatabase").Exists() &&
                 !bool.Parse(config.GetSection("UseMemoryDatabase").Value))
             {
-                await contextDatabase.Database.EnsureCreatedAsync();
-                await contextDatabase.Database.MigrateAsync();
+                try
+                {
+                    await contextDatabase.Database.EnsureCreatedAsync();
+                    await contextDatabase.Database.MigrateAsync();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex.Message, ex);
+                }
             }
         }
 
